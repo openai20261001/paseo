@@ -280,3 +280,9 @@ Each agent is a single JSON file. Fields relevant to this doc:
 | `lastStatus`                                 | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`                           |
 
 See [`docs/data-model.md`](./data-model.md) for the full agent record.
+
+## 静默维护重载
+
+维护程序更新会话的规则或工具文件后，可调用官方客户端 `refreshAgentSilently(agentId)`。客户端要求服务端声明 `silentAgentRefresh` 能力，不支持时拒绝发送；普通 `refreshAgent` 保留原有手动刷新行为。
+
+静默重载仅处理已加载且空闲的会话，保留原身份、原生 session 标识及时间线，不广播历史消息。生命周期锁内发现执行中或待审批时拒绝，让维护程序延后重试。关闭会话应更新文件并等待用户正常恢复。

@@ -4609,20 +4609,26 @@ export class Session {
   private async handleRefreshAgentRequest(
     msg: Extract<SessionInboundMessage, { type: "refresh_agent_request" }>,
   ): Promise<void> {
-    const { agentId, requestId } = msg;
+    const { agentId, requestId, silent = false } = msg;
     this.sessionLogger.info({ agentId }, `Refreshing agent ${agentId} from persistence`);
 
     try {
-      await this.restoreOwningWorkspaceForLegacyAgentRefresh(agentId);
-      await unarchiveAgentState(this.agentStorage, this.agentManager, agentId);
+      // 【joy】-静默维护只处理现有进程，关闭或归档的会话等用户正常恢复。
+      if (silent && !this.agentManager.getAgent(agentId)) {
+        throw new Error("Silent refresh requires a loaded agent");
+      }
+      if (!silent) await this.restoreOwningWorkspaceForLegacyAgentRefresh(agentId);
+      if (!silent) await unarchiveAgentState(this.agentStorage, this.agentManager, agentId);
       let snapshot: ManagedAgent;
       const existing = this.agentManager.getAgent(agentId);
       if (existing) {
-        await this.interruptAgentIfRunning(agentId);
+        if (!silent) await this.interruptAgentIfRunning(agentId);
         snapshot = await this.agentManager.reloadAgentSession(agentId, undefined, {
-          rehydrateFromDisk: true,
+          rehydrateFromDisk: !silent,
+          onlyIfIdle: silent,
         });
       } else {
+        if (silent) throw new Error("Silent refresh requires a loaded agent");
         const record = await this.agentStorage.get(agentId);
         if (!record) {
           throw new Error(`Agent not found: ${agentId}`);
@@ -4644,7 +4650,9 @@ export class Session {
           logger: this.sessionLogger,
         });
       }
-      await this.agentManager.hydrateTimelineFromProvider(agentId, { broadcast: true });
+      // 【joy】-保留原时间线；静默刷新不读取并广播历史，也不发送模型任务。
+      if (!silent)
+        await this.agentManager.hydrateTimelineFromProvider(agentId, { broadcast: true });
       await this.agentUpdates.forwardLiveAgent(snapshot);
       const timelineSize = this.agentManager.getTimeline(agentId).length;
       if (requestId) {
