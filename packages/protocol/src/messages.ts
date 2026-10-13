@@ -1838,6 +1838,8 @@ export const RefreshAgentRequestMessageSchema = z.object({
   type: z.literal("refresh_agent_request"),
   agentId: z.string(),
   requestId: z.string(),
+  // 【joy】-维护同步只重载配置，不能把旧消息广播为新输出。
+  silent: z.boolean().optional(),
 });
 
 export const CancelAgentRequestMessageSchema = z.object({
@@ -3579,6 +3581,8 @@ export const ServerInfoStatusPayloadSchema = z
         creationLifecycle: z.boolean().optional(),
         // COMPAT(hubAgentRpc): added in v0.8.0; remove gate after 2027-03-05.
         hubAgentRpc: z.boolean().optional(),
+        // 【joy】-显式声明静默刷新，维护工具缺能力时停止。
+        silentAgentRefresh: z.boolean().optional(),
         // COMPAT(internalAgents): added in v0.9.0; remove gate after 2027-03-17.
         internalAgents: z.boolean().optional(),
         // COMPAT(internalWorkspaces): added in v0.9.0; remove gate after 2027-03-17.

@@ -3235,10 +3235,30 @@ export class DaemonClient {
   }
 
   async refreshAgent(agentId: string, requestId?: string): Promise<AgentRefreshedStatusPayload> {
+    return this.refreshAgentRequest(agentId, requestId, false);
+  }
+
+  // 【joy】-能力未声明时拒绝发送，防止旧服务端忽略 silent 后广播历史。
+  async refreshAgentSilently(
+    agentId: string,
+    requestId?: string,
+  ): Promise<AgentRefreshedStatusPayload> {
+    if (this.getLastServerInfoMessage()?.features?.silentAgentRefresh !== true) {
+      throw new Error("Daemon does not support silentAgentRefresh");
+    }
+    return this.refreshAgentRequest(agentId, requestId, true);
+  }
+
+  private async refreshAgentRequest(
+    agentId: string,
+    requestId: string | undefined,
+    silent: boolean,
+  ): Promise<AgentRefreshedStatusPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "refresh_agent_request",
       agentId,
+      ...(silent ? { silent: true } : {}),
       requestId: resolvedRequestId,
     });
     return this.sendRequest({

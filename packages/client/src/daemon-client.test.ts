@@ -7527,3 +7527,49 @@ test.each([false, true])(
     await send;
   },
 );
+
+// 【joy】-旧 daemon 必须在发送前被拒绝，不能忽略静默参数而重发历史。
+test("silent refresh requires the advertised capability before sending", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "silent_test",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: {} });
+  await connected;
+  const count = mock.sent.length;
+  await expect(client.refreshAgentSilently("a")).rejects.toThrow("silentAgentRefresh");
+  expect(mock.sent.length).toBe(count);
+});
+test("silent refresh sends an explicit flag and waits for the matching acknowledgement", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "silent_test",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { silentAgentRefresh: true } });
+  await connected;
+  const result = client.refreshAgentSilently("a", "silent-refresh");
+  const request = parseSentFrame(mock.sent.at(-1));
+  expect(request).toMatchObject({ type: "refresh_agent_request", agentId: "a", silent: true });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "status",
+      payload: {
+        status: "agent_refreshed",
+        requestId: "silent-refresh",
+        agentId: "a",
+        timelineSize: 3,
+      },
+    }),
+  );
+  await expect(result).resolves.toMatchObject({ agentId: "a" });
+});

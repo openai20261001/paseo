@@ -1535,7 +1535,7 @@ export class AgentManager {
   reloadAgentSession(
     agentId: string,
     overrides?: Partial<AgentSessionConfig>,
-    options?: { rehydrateFromDisk?: boolean },
+    options?: { rehydrateFromDisk?: boolean; onlyIfIdle?: boolean },
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
       this.runLifecycleMutation(agentId, () =>
@@ -1544,13 +1544,27 @@ export class AgentManager {
     );
   }
 
+  // 【joy】-在生命周期锁内复核，维护重载不能取消刚开始的任务或待审批操作。
+  private assertMaintenanceReloadIdle(
+    agent: ManagedAgent,
+    options?: { onlyIfIdle?: boolean },
+  ): void {
+    if (
+      options?.onlyIfIdle &&
+      (this.hasInFlightRun(agent.id) || agent.pendingPermissions.size > 0)
+    ) {
+      throw new Error("Agent is busy; silent refresh deferred");
+    }
+  }
+
   private async reloadAgentSessionInternal(
     agentId: string,
     overrides?: Partial<AgentSessionConfig>,
-    options?: { rehydrateFromDisk?: boolean },
+    options?: { rehydrateFromDisk?: boolean; onlyIfIdle?: boolean },
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     let existing = this.requireSessionAgent(agentId);
+    this.assertMaintenanceReloadIdle(existing, options);
     if (this.hasInFlightRun(agentId)) {
       await this.cancelAgentRunBefore(agentId, "reload");
       existing = this.requireSessionAgent(agentId);

@@ -1794,6 +1794,8 @@ export class VoiceAssistantWebSocketServer {
         workspaceRequestReceipts: true,
         creationLifecycle: true,
         hubAgentRpc: true,
+        // 【joy】-客户端先确认静默能力，防止旧接口广播历史。
+        silentAgentRefresh: true,
         backgroundWorkspaces: true,
         // COMPAT(directorySync): added in v0.3.x, remove gate after 2027-02-12.
         directorySync: true,
